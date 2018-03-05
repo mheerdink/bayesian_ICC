@@ -2,7 +2,7 @@
 
 R Class to fit intra class correlations (ICCs) on multiple variables simultaneously using a Bayesian approach.
 
-It can estimate ICC values for many variables at the same time and in the same model; just give it a character vector with all desired variable as the first argument. This allows you to do some fancy things like comparing if the ICC of one variable is different from the same ICC for a different variable.
+It can estimate ICC values for many variables at the same time and in the same model; just give it a character vector with all desired variable as the first argument. This allows you to do some fancy things like studying the difference between ICCs for different variables.
 
 In Shrout and Fleiss' (1979) terminology (which is also followed in the psych package), it estimates ICC1, ICC1k, ICC2, ICC2k, ICC3, and ICC3k.
 
@@ -83,9 +83,9 @@ hypothesis(b$get_fit(), c(paste(b$icc1_formulae()[1:2], collapse=' > '), paste(b
 
 Bayesian estimation of the confidence intervals of ICCs is not perfect, as explained in this paper: https://doi.org/10.1186/1471-2288-14-121
 
-The authors recommend the present approach only if the data are normally distributed, and if the number of levels of each random factors (i.e., the number of objects or the number of objects) is smaller than 8. In other cases, Modified Large Sample (MLS) or Generalized Confidence Interval (GCI) methods might be better for obtaining the confidence interval. This means that, strictly speaking, this approach cannot be used with the Shrout & Fleiss (1979) example, as I did above.
+The authors recommend the present approach only if the data are normally distributed, and if the number of levels of each random factors (i.e., the number of objects or the number of objects) is greater than 8. In other cases, Modified Large Sample (MLS) or Generalized Confidence Interval (GCI) methods might be better for obtaining the confidence interval. This means that, strictly speaking, this approach cannot be used with the Shrout & Fleiss (1979) example, as I did above.
 
-Additionally, these authors recommend (based on Gelman's work) a uniform flat (improper) prior on [0, ∞] but I can't seem to figure out how to set the uniform prior to be one-sided. So the priors are [-∞, ∞] by default. To revert to the default brms priors instead (currently student t-distributions), just call `r def_priors <- b$get_prios(default_priors = T)` (if the object is b, of course), and use these to fit the model, `r b$fit(df, prior = def_priors)` (sorry, no 1-line solution).
+Additionally, these authors recommend (based on Gelman's work) a uniform flat (improper) prior on [0, ∞] but I can't seem to figure out how to set the uniform prior to be one-sided. So the priors are [-∞, ∞] by default. To revert to the default brms priors instead (currently student t-distributions), just call `def_priors <- b$get_prios(default_priors = T)` and use these to default priors when fitting the model, `b$fit(df, prior = def_priors)` (sorry, no 1-line solution).
 
 I still hope this will be useful to someone!
 
