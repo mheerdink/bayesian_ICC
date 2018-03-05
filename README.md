@@ -85,9 +85,18 @@ Bayesian estimation of the confidence intervals of ICCs is not perfect, as expla
 
 The authors recommend the present approach only if the data are normally distributed, and if the number of levels of each random factors (i.e., the number of objects or the number of objects) is greater than 8. In other cases, Modified Large Sample (MLS) or Generalized Confidence Interval (GCI) methods might be better for obtaining the confidence interval. This means that, strictly speaking, this approach cannot be used with the Shrout & Fleiss (1979) example, as I did above.
 
-Additionally, these authors recommend (based on Gelman's work) a uniform flat (improper) prior on [0, ∞] but I can't seem to figure out how to set the uniform prior to be one-sided. So the priors are [-∞, ∞] by default. To revert to the default brms priors instead (currently student t-distributions), just call `def_priors <- b$get_prios(default_priors = T)` and use these to default priors when fitting the model, `b$fit(df, prior = def_priors)` (sorry, no 1-line solution).
+## About priors
 
-I still hope this will be useful to someone!
+Additionally, the same authors recommend (based on Gelman's work) a uniform flat (improper) prior on [0, ∞]. However, this is against the recommendations on priors on the Stan website (https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations), I find that this often leads to problems in estimating the model, and I can't seem to figure out how to set the uniform prior to be one-sided.
+
+The default priors are therefore cauchy(0, 3) priors, which cover the density distribution well.
+
+You can also use either:
+
+* BRMS default priors (currently student-t): call `p <- b$get_priors(df, priors = 'brms')` followed by `b$fit(df, p)`
+* Uniform priors on [-∞, ∞]: call `p <- b$get_priors(df, priors = 'uniform')` followed by `b$fit(df, p)`
+
+I hope this will be useful to someone!
 
 ## Acknowledgements
 

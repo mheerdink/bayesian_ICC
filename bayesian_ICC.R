@@ -96,21 +96,26 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
             return(fit)
         },
 
-        get_prior = function(df, default_priors=F) {
+        get_prior = function(df, priors=c('cauchy', 'default', 'uniform')) {
             # Erase all default priors because stan then defaults to uniform on [-∞, ∞]
             # I haven't figured out how to make the priors uniform on [0, ∞], which might be better
             # according to doi:10.1186/1471-2288-14-121
             bform <- get('bform', thisEnv)
-            prior <- brms::get_prior(bform, df)
-            if (! default_priors)
-                prior[, 'prior'] <- ''
-            return(prior)
+            priors <- match.arg(priors)
+            p <- brms::get_prior(bform, df)
+            if (priors == 'cauchy') {
+                # use cauchy(0,3) which seems to cover the likely values of sigma (and a lot more)
+                p[p$class == 'sigma' | (p$class == 'sd' & p$group == ''), 'prior'] <- 'cauchy(0, 3)'
+            } else if (priors == 'uniform') {
+                p[, 'prior'] <- ''
+            }
+            return(p)
         },
 
         get_bform = function() {
             return(get('bform', thisEnv))
         },
-        
+
         set_bform = function(bform) {
             message('Use with extreme caution, YMMV')
             assign('bform', bform, envir = thisEnv)
