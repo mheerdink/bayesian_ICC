@@ -100,7 +100,7 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
             return(get('bform', thisEnv))
         },
 
-        # The functions below generate the hypotheses to test ICC1s
+        # The functions below generate the hypotheses to test ICCs
         #
         # Args:
         #  test_value   The value against which the calculated ICC is compared
@@ -132,7 +132,7 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
             if (get('which', thisEnv) == 1) {
                 stop("Model is not set up for ICC2 but for ICC1; cannot generate hypotheses.")
             } else if (get('which', thisEnv) == 3) {
-                warning("Model is not set up for ICC2 but for ICC3; use result with care")
+                warning("Model is not set up for ICC2 but for ICC3; generated hypotheses cannot be tested in this model.")
             }
             stop("Not implemented yet")
         },
@@ -140,7 +140,7 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
             if (get('which', thisEnv) == 1) {
                 stop("Model is not set up for ICC2 but for ICC1; cannot generate hypotheses.")
             } else if (get('which', thisEnv) == 3) {
-                warning("Model is not set up for ICC2 but for ICC3; use result with care")
+                warning("Model is not set up for ICC2 but for ICC3; generated hypotheses cannot be tested in this model.")
             }
             stop("Not implemented yet")
         },
