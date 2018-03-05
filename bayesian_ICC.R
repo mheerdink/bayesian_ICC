@@ -1,10 +1,11 @@
-bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
+bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
     # Class to fit six ICCs (ICC1, ICC1k, ICC2, ICC2k, ICC3, ICC3k) on multiple variables simultaneously in a Bayesian framework with ease
     #
     # Args:
     #  vars      vector of characters, specifying the variable names of the variables to aggregate
     #  objects   character, specifying the objects having been rated (e.g., the number of groups or video clips)
     #  judges    character, optional specification for specification of judges (required to calculate ICC2 and ICC3)
+    #  type      ICC type, 1 (each judge judged only one object), 2 (judges judged multiple objects and were randomly sampled) or 3 (judges judged multiple object and are the complete population of possible judges)
     #  rescor    Whether or not to model response correlation if > 1 var
     #
     # Returns:
@@ -14,11 +15,11 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
         stop("Vars should be a character vector; objects should be a character variable")
     if (! is.na(judges) & (!is.character(judges) | length(judges) > 1))
         stop("Judges should be NA or a character variable")
-    if (length(which) != 1 | ! which %in% 1:3)
-        stop("Which should be 1, 2, or 3 for ICC1, ICC2, and ICC3, respectively")
-    if (which %in% 2:3 & is.na(judges))
+    if (length(type) != 1 | ! type %in% 1:3)
+        stop("type should be 1, 2, or 3 for ICC1, ICC2, and ICC3, respectively")
+    if (type %in% 2:3 & is.na(judges))
         stop("Specify judges for ICC2 or ICC3")
-    if (which == 1 & !is.na(judges))
+    if (type == 1 & !is.na(judges))
         warning("Judges argument will be ignored when calculating ICC1")
     
     library(brms)
@@ -26,14 +27,14 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
 
     thisEnv <- environment()
     fit <- NULL
-    dividers <- NULL
+    k <- NULL
     group_par <- gsub('[\\._]', '', objects)
     pars <- gsub('[\\._]', '', vars)
 
-    if (which %in% 2:3) {
-        if (which == 2)
+    if (type %in% 2:3) {
+        if (type == 2)
             bform <- bf(as.formula(paste0('cbind(', paste(vars, collapse=', '), ') ~ 1 + (1 | ', objects, ') + (1 | ', judges, ')')))
-        if (which == 3)
+        if (type == 3)
             bform <- bf(as.formula(paste0('cbind(', paste(vars, collapse=', '), ') ~ 1 + ', judges, ' + (1 | ', objects, ')')))
     } else {
         bform <- bf(as.formula(paste0('cbind(', paste(vars, collapse=', '), ') ~ 1 + (1 | ', objects, ')')))
@@ -62,8 +63,8 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
             objects <- get('objects', thisEnv)
             result <- brm(bform, data = df, cores = cores, ...)
             assign('fit', result, envir = thisEnv)
-            dividers <- do.call(apply, c(list(X = df %>% select_(.dots = c(objects, vars)) %>% group_by_(objects) %>% summarise_all(funs(sum(!is.na(.)))) %>% select(-1), MARGIN=2, FUN=k_fun), k_fun_args))
-            assign('dividers', dividers, envir = thisEnv)
+            k <- do.call(apply, c(list(X = df %>% select_(.dots = c(objects, vars)) %>% group_by_(objects) %>% summarise_all(funs(sum(!is.na(.)))) %>% select(-1), MARGIN=2, FUN=k_fun), k_fun_args))
+            assign('k', k, envir = thisEnv)
             return(result)
         },
         
@@ -99,123 +100,103 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
         get_bform = function() {
             return(get('bform', thisEnv))
         },
+        
+        set_bform = function(bform) {
+            message('Use with extreme caution, YMMV')
+            assign('bform', bform, envir = thisEnv)
+        },
 
-        # The functions below generate the hypotheses to test ICCs
+        # The functions below generate the calculations to estimate the ICCs
         #
         # Args:
-        #  test_value   The value against which the calculated ICC is compared
+        #  k   Optional vector of k values; default is to determine from the data
         #
         # Returns:
-        #   a character vector of hypotheses
+        #   a character vector of calculations
         
-        icc1k_hypotheses = function(test_value = .01, dividers = NA) {
-            if (get('which', thisEnv) != 1)
-                warning("Model is not set up for ICC1 but for ICC", get('which', thisEnv), "; use result with care")
-            if (is.na(dividers))
-                dividers <- get('dividers', thisEnv)
+        icc1_formulae = function(k = NA) {
+            if (get('type', thisEnv) != 1)
+                warning("Model is not set up for ICC1 but for ICC", get('type', thisEnv), "; use result with care")
+            if (is.na(k))
+                k <- get('k', thisEnv)
             vars <- get('vars', thisEnv)
             objects <- get('objects', thisEnv)
+            pars <- get('pars', thisEnv)
             if (length(pars) > 1) {
-                pars <- paste0('_', get('pars', thisEnv))
+                pars <- paste0('_', pars)
             } else {
                 pars <- ''
             }
-            return(hyps.icc1k <- paste0('sd_', objects, '_', pars, '_Intercept^2 / (sd_', objects, '_', pars, '_Intercept^2 + sigma', pars, '^2 / ', dividers, ') > ', test_value))
-        },
-
-        icc1_hypotheses = function(test_value = .01) {
-            m <- get('me', thisEnv)
-            m$icc1k_hypotheses(test_value = test_value, dividers = 1)
+            formulae <- c(
+                paste0('sd_', objects, '_', pars, '_Intercept^2 / (sd_', objects, '_', pars, '_Intercept^2 + sigma', pars, '^2)'),
+                paste0('sd_', objects, '_', pars, '_Intercept^2 / (sd_', objects, '_', pars, '_Intercept^2 + sigma', pars, '^2 / ', k, ')')
+            )
+            names(formulae) <- paste(rep(vars, 2), rep(c('ICC1', 'ICC1k'), each=length(vars)))
+            return(formulae)
         },
         
-        icc2_hypotheses = function(test_value = .01) {
-            if (get('which', thisEnv) == 1) {
+        icc2_formulae = function(k = NA) {
+            if (get('type', thisEnv) == 1)
                 stop("Model is not set up for ICC2 but for ICC1; cannot generate hypotheses.")
-            } else if (get('which', thisEnv) == 3) {
+            if (get('type', thisEnv) == 3)
                 warning("Model is not set up for ICC2 but for ICC3; generated hypotheses cannot be tested in this model.")
+            if (is.na(k))
+                k <- get('k', thisEnv)
+            vars <- get('vars', thisEnv)
+            objects <- get('objects', thisEnv)
+            judges <- get('judges', thisEnv)
+            pars <- get('pars', thisEnv)
+            if (length(pars) > 1) {
+                pars <- paste0('_', pars)
+            } else {
+                pars <- ''
             }
-            stop("Not implemented yet")
+            formulae <- c(
+                paste0('sd_', objects, '_', pars, '_Intercept^2 / (sd_', objects, '_', pars, '_Intercept^2 + sd_', judges, '_', pars, '_Intercept^2 + sigma', pars, '^2)'),
+                paste0('sd_', objects, '_', pars, '_Intercept^2 / (sd_', objects, '_', pars, '_Intercept^2 + sd_', judges, '_', pars, '_Intercept^2 + sigma', pars, '^2 / ', k, ')')
+            )
+            names(formulae) <- paste(rep(vars, 2), rep(c('ICC2', 'ICC2k'), each=length(vars)))
+            return(formulae)
         },
-        icc2k_hypotheses = function(test_value = .01) {
-            if (get('which', thisEnv) == 1) {
-                stop("Model is not set up for ICC2 but for ICC1; cannot generate hypotheses.")
-            } else if (get('which', thisEnv) == 3) {
-                warning("Model is not set up for ICC2 but for ICC3; generated hypotheses cannot be tested in this model.")
+        
+        icc3_formulae = function(k = NA) {
+            # the calculation of ICC3 is identical to the correlation of ICC1
+            # but the result is different because the model is different
+            m <- get('me', thisEnv)
+            formulae <- suppressWarnings(m$icc1_formulae(k = k))
+            names(formulae) <- sub('ICC1', 'ICC3', names(formulae))
+            return(formulae)
+        },
+
+        icc = function(test = "= 0", k = NA) {
+            # The functions below estimate the actual ICCs
+            #
+            # Args:
+            #  test_values   The value(s) against which the calculated ICCs are compared
+            #
+            # Returns:
+            #   a brmshypothesis object, that can be used to plot or to extract confidence intervals
+            m <- get('me', thisEnv)
+            fit <- m$get_fit()
+            if (get('type', thisEnv) == 1) {
+                fs <- m$icc1_formulae(k = k)
+            } else if (get('type', thisEnv) == 2) {
+                fs <- m$icc2_formulae(k = k)
+            } else if (get('type', thisEnv) == 3) {
+                fs <- m$icc3_formulae(k = k)
             }
-            stop("Not implemented yet")
-        },
-        
-        icc3_hypotheses = function(test_value = .01) {
-            if (get('which', thisEnv) != 3)
-                warning("Model is not set up for ICC3 but for ICC", get('which', thisEnv), "; use result with care")
-            # ICC3 calculation is actually identical to ICC1 calculation, just on a different model
-            m <- get('me', thisEnv)
-            suppressWarnings(m$icc1k_hypotheses(test_value = test_value, dividers = 1))
-        },
-
-        icc3k_hypotheses = function(test_value = .01) {
-            if (get('which', thisEnv) != 3)
-                warning("Model is not set up for ICC3 but for ICC", get('which', thisEnv), "; use result with care")
-            # ICC3 calculation is actually identical to ICC1 calculation, just on a different model
-            m <- get('me', thisEnv)
-            suppressWarnings(m$icc1k_hypotheses(test_value = test_value))
-        },
-        
-        # The functions below estimate the actual ICCs
-        #
-        # Args:
-        #  test_value   The value against which the calculated ICC is compared
-        #
-        # Returns:
-        #   a brmshypothesis object, that can be used to plot or to extract confidence intervals
-        icc1 = function(test_value = .01) {
-            if (get('which', thisEnv) != 1)
-                stop("Model is not set up for ICC1 but for ICC", get('which', thisEnv))
-            m <- get('me', thisEnv)
-            fit <- m$get_fit()
-            hyp <- m$icc1_hypotheses(test_value = test_value)
-            return(hypothesis(fit, hyp, class = NULL))
-        },
-        
-        icc1k = function(test_value = .01) {
-            if (get('which', thisEnv) != 1)
-                stop("Model is not set up for ICC1 but for ICC", get('which', thisEnv))
-            m <- get('me', thisEnv)
-            fit <- m$get_fit()
-            hyp <- m$icc1k_hypotheses(test_value = test_value)
-            return(hypothesis(fit, hyp, class = NULL))
-        },
-        
-        icc2 = function(test_value = .01) {
-            stop("Not implemented yet")
-        },
-        icc2k = function(test_value = .01) {
-            stop("Not implemented yet")
-        },
-
-        icc3 = function(test_value = .01) {
-            if (get('which', thisEnv) != 3)
-                stop("Model is not set up for ICC3 but for ICC", get('which', thisEnv))
-            m <- get('me', thisEnv)
-            fit <- m$get_fit()
-            hyp <- m$icc3_hypotheses(test_value = test_value)
-            return(hypothesis(fit, hyp, class = NULL))
-        },
-
-        icc3k = function(test_value = .01) {
-            if (get('which', thisEnv) != 3)
-                stop("Model is not set up for ICC3 but for ICC", get('which', thisEnv))
-            m <- get('me', thisEnv)
-            fit <- m$get_fit()
-            hyp <- m$icc3k_hypotheses(test_value = test_value)
-            return(hypothesis(fit, hyp, class = NULL))
+            hyps <- paste(fs, test)
+            names(hyps) <- names(fs)
+            hypothesis(fit, hyps, class=NULL)
         },
         
         getEnv = function() {
             return(get('thisEnv', thisEnv))
         }
     )
+
     assign('this', me, envir = thisEnv)
     class(me) <- append(class(me), 'bayesian_ICC')
+
     return(me)
 }

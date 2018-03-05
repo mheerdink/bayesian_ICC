@@ -1,26 +1,18 @@
 # bayesian_ICC
-R Class to estimate intra class correlations (ICCs) in a Bayesian framework.
 
-Currently only ICC1, ICC1k, ICC3, and ICC3k (ICC2/2k are easy to add, will be done soon).
+R Class to fit intra class correlations (ICCs) on multiple variables simultaneously using a Bayesian approach.
 
-I use Shrout and Fleiss' (1979) terminology, which is also followed in the psych package.
+It can estimate ICC values for many variables at the same time and in the same model; just give it a character vector with all desired variable as the first argument. This allows you to do some fancy things like comparing if the ICC of one variable is different from the same ICC for a different variable.
 
-This class estimate ICC values for many variables at the same time and in the same model; just give it a character vector with all desired variable as the first argument.
+In Shrout and Fleiss' (1979) terminology (which is also followed in the psych package), it estimates ICC1, ICC1k, ICC2, ICC2k, ICC3, and ICC3k.
 
-## On the test value of 0.01
-
-The hypotheses test, by default, if the estimated ICC value is greater than 0.01. Why not 0, you may ask?
-
-The Bayesian estimation ensures that all estimated ICC values will be in the interval [0,1]. Thus, the confidence intervals for the estimated ICC values will always exclude 0, and this is not a meaningful test. To check this, just run fit$icc1(test_value = 0) on a fit object. All ICCs will be significant, no matter how small.
-
-The value of 0.01 is just a random small number. Feel free to set your own lower bound using the test_value parameter to all icc functions.
-
-## Example using data from the multilevel package
+## Example usage
 
 ```r
 library(brms)
 library(rstan)
 library(dplyr)
+library(tidyr)
 library(psych)
 
 # Use example from Shrout and Fleiss (1979), also used in the psych::ICC() help page
@@ -38,21 +30,25 @@ ICC(sf)
 source('bayesian_ICC.R')
 
 # get the data in long format for the bayesian ICC
+# and create a second rating column to demonstrate the multivariate ICC
 sf.df <- sf %>%
     as_data_frame() %>%
     mutate(object = 1:n()) %>%
-    gather(judge, value, -object)
+    gather(judge, rating, -object) %>%
+    mutate(rating2 = rnorm(nrow(.)))
 
-sf.df
+head(sf.df, 8)
 
 #######################
 ### ICC1 and ICC 1k ###
 #######################
 
-b <- bayesian_ICC('value', 'object', which = 1)
+# create the bICC object with type = 1
+b <- bayesian_ICC(c('rating', 'rating2'), 'object', type = 1)
 
-# Fit the model (you might want to adjust the priors)
-b$fit(sf.df, prior = c(prior(cauchy(0, 5), class='sigma')))
+# Fit the model
+# (you might want to adjust the priors; to see the default priors, run b$get_priors(df.df))
+b$fit(sf.df, prior = c(prior(cauchy(0, 5), class='sigma', resp='rating'), prior(cauchy(0, 5), class='sigma', resp='rating2')))
 
 # adapt_delta should be increased
 # in addition, it is advisable to check if sampling went allright
@@ -66,17 +62,30 @@ b$refit(thin = 8, iter = 8000, warmup = 200, control = list(adapt_delta = .99))
 stan_ac(b$get_fit()$fit)
 # no more issues
 
-# get ICC1
-b$icc1()
-plot(b$icc1())
-# is it similar to the ICC1 value found by psych::ICC()?
-b$icc1(test_value = .17)
-# conclusion: not different
+# now calculate and plot ICC1 and ICC1k
+b$icc()
+plot(b$icc())
 
-# get ICC1k
-b$icc1k()
-plot(b$icc1k())
-# is it similar to the ICC1k value found by psych::ICC()?
-b$icc1k(test_value = .44)
-# conclusion: not different
+# are the values different from the ICC1 and ICC1k values found by psych::ICC()?
+# (look in rows 1 and 3)
+b$icc(test = paste('=', c(.17, 0, .44, 0)))
+# conclusion: quite similar
+
+# and, just for the fun of it, something that you cannot do with 'normal' ICC values:
+# how much higher are the ICC values for 'rating' than those for the randomly generated 'rating2'?
+hypothesis(b$get_fit(), c(paste(b$icc1_formulae()[1:2], collapse=' > '), paste(b$icc1_formulae()[3:4], collapse=' > ')), class=NULL)
 ```
+
+## Acknowledgements
+
+None of this is my own invention, of course. All I did was combining others' work into an easy to use package.
+
+I borrowed formulae, inspiration, and programming ideas from:
+
+* http://www.kohleth.info/2017/10/09/all-the-different-iccs/
+* https://cran.r-project.org/web/packages/brms/vignettes/brms_phylogenetics.html
+* http://www.cyclismo.org/tutorial/R/s3Classes.html
+* Murray Logan's excellent course on both Frequentist and Bayesian statistics, which I can highly recommend, http://www.flutterbys.com.au/stats/course.html
+* Shrout, P. E., & Fleiss, J. L. (1979). Intraclass correlations: Uses in assessing rater reliability. *Psychological Bulletin*, *86*, 420–428. https://doi.org/10.1037/0033-2909.86.2.420
+
+Credits also go to the psych, brms, dplyr/tidyr, and stan creators.
