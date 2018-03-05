@@ -1,9 +1,11 @@
 # bayesian_ICC
 R Class to estimate ICC values in a Bayesian framework
 
-Currently only ICC1 and ICC1, ICC2/2k/3/3k are easy to add.
+Currently only ICC1 and ICC1k, ICC2/2k/3/3k are easy to add.
 
 I use Shrout and Fleiss' (1979) terminology, which is also followed in the psych package.
+
+This class estimate ICC1(k) values for many variables at the same time and in the same model; just give it a character vector with all desired variable as the first argument.
 
 ## Example using data from the multilevel package
 
