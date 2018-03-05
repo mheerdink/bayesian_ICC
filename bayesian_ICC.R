@@ -1,4 +1,4 @@
-bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
+bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
     # Class to fit six ICCs (ICC1, ICC1k, ICC2, ICC2k, ICC3, ICC3k) on multiple variables simultaneously in a Bayesian framework with ease
     #
     # Args:
@@ -13,13 +13,13 @@ bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
     
     if (! is.character(vars) | ! is.character(objects) | length(objects) > 1)
         stop("Vars should be a character vector; objects should be a character variable")
-    if (! is.na(judges) & (!is.character(judges) | length(judges) > 1))
-        stop("Judges should be NA or a character variable")
+    if (! is.null(judges) & (!is.character(judges) | length(judges) > 1))
+        stop("Judges should be NULL or a character variable")
     if (length(type) != 1 | ! type %in% 1:3)
         stop("type should be 1, 2, or 3 for ICC1, ICC2, and ICC3, respectively")
-    if (type %in% 2:3 & is.na(judges))
+    if (type %in% 2:3 & is.null(judges))
         stop("Specify judges for ICC2 or ICC3")
-    if (type == 1 & !is.na(judges))
+    if (type == 1 & !is.null(judges))
         warning("Judges argument will be ignored when calculating ICC1")
     
     library(brms)
@@ -46,22 +46,27 @@ bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
     me <- list(
         thisEnv = thisEnv,
         
-        fit = function(df, ..., rescor = F, cores = 4, k = NA, k_fun = min, k_fun_args = list(na.rm=T)) {
+        fit = function(df, ..., prior = NULL, rescor = F, cores = 4, k = NULL, k_fun = min, k_fun_args = list(na.rm=T)) {
             # Fits the multivariate Bayesian model using brms
             #
             # Args:
             #  df          Data frame in which to find the variables
-            #  k           The k value used to calculate the ICC*k values. This is normally the number of observations of each object (e.g., the number of group members). If NA, k_fun and k_fun_args will be used to find this value.
-            #  k_fun       Function to run on the table of observations per variable and per object (the default, min, finds the minimum number of observations of each object)
+            #  k_fun       Function to calculate the ICC*k values from the table of observations per
+            #              variable and per object (the default, min, finds the minimum number of observations
+            #              of each object). Can be overriden by setting k when calling icc()
             #  k_fun_args  List of named arguments passed on to k_fun.
             #  ...         Arguments passed to brms
             fit <- get('fit', thisEnv)
             if (! is.null(fit))
                 message("Refitting; previous fit will be overwritten")
+            if (is.null(prior)) {
+                m <- get('me', thisEnv)
+                prior <- m$get_prior(df)
+            }
             bform <- get('bform', thisEnv)
             vars <- get('vars', thisEnv)
             objects <- get('objects', thisEnv)
-            result <- brm(bform, data = df, cores = cores, ...)
+            result <- brm(bform, data = df, cores = cores, prior = prior, ...)
             assign('fit', result, envir = thisEnv)
             k <- do.call(apply, c(list(X = df %>% select_(.dots = c(objects, vars)) %>% group_by_(objects) %>% summarise_all(funs(sum(!is.na(.)))) %>% select(-1), MARGIN=2, FUN=k_fun), k_fun_args))
             assign('k', k, envir = thisEnv)
@@ -91,10 +96,15 @@ bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
             return(fit)
         },
 
-        get_prior = function(df) {
-            # Return default priors
+        get_prior = function(df, default_priors=F) {
+            # Erase all default priors because stan then defaults to uniform on [-∞, ∞]
+            # I haven't figured out how to make the priors uniform on [0, ∞], which might be better
+            # according to doi:10.1186/1471-2288-14-121
             bform <- get('bform', thisEnv)
-            brms::get_prior(bform, df)
+            prior <- brms::get_prior(bform, df)
+            if (! default_priors)
+                prior[, 'prior'] <- ''
+            return(prior)
         },
 
         get_bform = function() {
@@ -114,10 +124,10 @@ bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
         # Returns:
         #   a character vector of calculations
         
-        icc1_formulae = function(k = NA) {
+        icc1_formulae = function(k = NULL) {
             if (get('type', thisEnv) != 1)
                 warning("Model is not set up for ICC1 but for ICC", get('type', thisEnv), "; use result with care")
-            if (is.na(k))
+            if (is.null(k))
                 k <- get('k', thisEnv)
             vars <- get('vars', thisEnv)
             objects <- get('objects', thisEnv)
@@ -135,12 +145,12 @@ bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
             return(formulae)
         },
         
-        icc2_formulae = function(k = NA) {
+        icc2_formulae = function(k = NULL) {
             if (get('type', thisEnv) == 1)
                 stop("Model is not set up for ICC2 but for ICC1; cannot generate hypotheses.")
             if (get('type', thisEnv) == 3)
                 warning("Model is not set up for ICC2 but for ICC3; generated hypotheses cannot be tested in this model.")
-            if (is.na(k))
+            if (is.null(k))
                 k <- get('k', thisEnv)
             vars <- get('vars', thisEnv)
             objects <- get('objects', thisEnv)
@@ -159,7 +169,7 @@ bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
             return(formulae)
         },
         
-        icc3_formulae = function(k = NA) {
+        icc3_formulae = function(k = NULL) {
             # the calculation of ICC3 is identical to the correlation of ICC1
             # but the result is different because the model is different
             m <- get('me', thisEnv)
@@ -168,7 +178,7 @@ bayesian_ICC <- function(vars, objects, judges = NA, type = 1, rescor = F) {
             return(formulae)
         },
 
-        icc = function(test = "= 0", k = NA) {
+        icc = function(test = "= 0", k = NULL) {
             # The functions below estimate the actual ICCs
             #
             # Args:

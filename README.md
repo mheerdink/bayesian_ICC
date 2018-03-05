@@ -29,8 +29,10 @@ ICC(sf)
 
 source('bayesian_ICC.R')
 
-# get the data in long format for the bayesian ICC
-# and create a second rating column to demonstrate the multivariate ICC
+set.seed(123)
+
+# the data have to be in long format for the bayesian ICC
+# also, create a second rating column to demonstrate the multivariate ICC
 sf.df <- sf %>%
     as_data_frame() %>%
     mutate(object = 1:n()) %>%
@@ -47,8 +49,9 @@ head(sf.df, 8)
 b <- bayesian_ICC(c('rating', 'rating2'), 'object', type = 1)
 
 # Fit the model
-# (you might want to adjust the priors; to see the default priors, run b$get_priors(df.df))
-b$fit(sf.df, prior = c(prior(cauchy(0, 5), class='sigma', resp='rating'), prior(cauchy(0, 5), class='sigma', resp='rating2')))
+# You might want to adjust the priors; all priors are uniform on [-∞, ∞] by default, run b$get_priors(df.df)
+# to get the priors and later pass them to fit using the 'prior' argument, e.g. b$fit(sf.df, prior = b$get_priors(df.df))
+b$fit(sf.df)
 
 # adapt_delta should be increased
 # in addition, it is advisable to check if sampling went allright
@@ -69,12 +72,22 @@ plot(b$icc())
 # are the values different from the ICC1 and ICC1k values found by psych::ICC()?
 # (look in rows 1 and 3)
 b$icc(test = paste('=', c(.17, 0, .44, 0)))
-# conclusion: quite similar
+# conclusion: slightly higher
 
 # and, just for the fun of it, something that you cannot do with 'normal' ICC values:
 # how much higher are the ICC values for 'rating' than those for the randomly generated 'rating2'?
 hypothesis(b$get_fit(), c(paste(b$icc1_formulae()[1:2], collapse=' > '), paste(b$icc1_formulae()[3:4], collapse=' > ')), class=NULL)
 ```
+
+## Caveats
+
+Bayesian estimation of the confidence intervals of ICCs is not perfect, as explained in this paper: https://doi.org/10.1186/1471-2288-14-121
+
+The authors recommend the present approach only if the data are normally distributed, and if the number of levels of each random factors (i.e., the number of objects or the number of objects) is smaller than 8. In other cases, Modified Large Sample (MLS) or Generalized Confidence Interval (GCI) methods might be better for obtaining the confidence interval. This means that, strictly speaking, this approach cannot be used with the Shrout & Fleiss (1979) example, as I did above.
+
+Additionally, these authors recommend (based on Gelman's work) a uniform flat (improper) prior on [0, ∞] but I can't seem to figure out how to set the uniform prior to be one-sided. So the priors are [-∞, ∞] by default. To revert to the default brms priors instead (currently student t-distributions), just call `r def_priors <- b$get_prios(default_priors = T)` (if the object is b, of course), and use these to fit the model, `r b$fit(df, prior = def_priors)` (sorry, no 1-line solution).
+
+I still hope this will be useful to someone!
 
 ## Acknowledgements
 

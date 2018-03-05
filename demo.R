@@ -21,8 +21,12 @@ ICC(sf)
 
 source('bayesian_ICC.R')
 
-# get the data in long format for the bayesian ICC
-# and create a second rating column to demonstrate the multivariate ICC
+# set random seed for reproducibility
+# (the icc estimates will still vary from run to run)
+set.seed(123)
+
+# get the data in long format for the bayesian ICC and create a
+# second rating column to demonstrate the multivariate ICC
 sf.df <- sf %>%
     as_data_frame() %>%
     mutate(object = 1:n()) %>%
@@ -39,8 +43,9 @@ head(sf.df, 8)
 b <- bayesian_ICC(c('rating', 'rating2'), 'object', type = 1)
 
 # Fit the model
-# (you might want to adjust the priors; to see the default priors, run b$get_priors(df.df))
-b$fit(sf.df, prior = c(prior(cauchy(0, 5), class='sigma', resp='rating'), prior(cauchy(0, 5), class='sigma', resp='rating2')))
+# You might want to adjust the priors; all priors are uniform on [-∞, ∞] by default, run b$get_priors(df.df)
+# to get the priors and later pass them to fit using the 'prior' argument, e.g. b$fit(sf.df, prior = b$get_priors(df.df))
+b$fit(sf.df)
 
 # adapt_delta should be increased
 # in addition, it is advisable to check if sampling went allright
@@ -61,7 +66,7 @@ plot(b$icc())
 # are the values different from the ICC1 and ICC1k values found by psych::ICC()?
 # (look in rows 1 and 3)
 b$icc(test = paste('=', c(.17, 0, .44, 0)))
-# conclusion: quite similar
+# conclusion: slightly higher
 
 # and, just for the fun of it, something that you cannot do with 'normal' ICC values:
 # how much higher are the ICC values for 'rating' than those for the randomly generated 'rating2'?
@@ -75,8 +80,8 @@ hypothesis(b$get_fit(), c(paste(b$icc1_formulae()[1:2], collapse=' > '), paste(b
 b <- bayesian_ICC(c('rating', 'rating2'), 'object', 'judge', type = 2)
 
 # Fit the model
-# (you might want to adjust the priors; to see the default priors, run b$get_priors(df.df))
-b$fit(sf.df, prior = c(prior(cauchy(0, 5), class='sigma', resp='rating'), prior(cauchy(0, 5), class='sigma', resp='rating2')), thin = 8, iter = 8000, warmup = 200, control=list(adapt_delta = .99))
+# (you might want to adjust the default uniform priors, run b$get_priors(df.df) to get a starting point)
+b$fit(sf.df, thin = 8, iter = 8000, warmup = 200, control=list(adapt_delta = .99))
 
 # check sampling
 stan_trace(b$get_fit()$fit)
@@ -100,8 +105,8 @@ b$icc(test = paste('=', c(.29, 0, .62, 0)))
 b <- bayesian_ICC(c('rating', 'rating2'), 'object', 'judge', type = 3)
 
 # Fit the model
-# (you might want to adjust the priors; to see the default priors, run b$get_priors(df.df))
-b$fit(sf.df, prior = c(prior(cauchy(0, 5), class='sigma', resp='rating'), prior(cauchy(0, 5), class='sigma', resp='rating2')), thin = 8, iter = 8000, warmup = 200, control=list(adapt_delta = .99))
+# (you might want to adjust the default uniform priors; run b$get_priors(df.df) to get the starting point)
+b$fit(sf.df, thin = 8, iter = 8000, warmup = 200, control=list(adapt_delta = .99))
 
 # check sampling:
 stan_trace(b$get_fit()$fit)
