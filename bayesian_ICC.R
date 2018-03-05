@@ -34,7 +34,7 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
         if (which == 2)
             bform <- bf(as.formula(paste0('cbind(', paste(vars, collapse=', '), ') ~ 1 + (1 | ', objects, ') + (1 | ', judges, ')')))
         if (which == 3)
-            bform <- bf(as.formula(paste0('cbind(', paste(vars, collapse=', '), ') ~ 1 + judges + (1 | ', objects, ')')))
+            bform <- bf(as.formula(paste0('cbind(', paste(vars, collapse=', '), ') ~ 1 + ', judges, ' + (1 | ', objects, ')')))
     } else {
         bform <- bf(as.formula(paste0('cbind(', paste(vars, collapse=', '), ') ~ 1 + (1 | ', objects, ')')))
     }
@@ -90,6 +90,16 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
             return(fit)
         },
 
+        get_prior = function(df) {
+            # Return default priors
+            bform <- get('bform', thisEnv)
+            brms::get_prior(bform, df)
+        },
+
+        get_bform = function() {
+            return(get('bform', thisEnv))
+        },
+
         # The functions below generate the hypotheses to test ICC1s
         #
         # Args:
@@ -98,12 +108,9 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
         # Returns:
         #   a character vector of hypotheses
         
-        icc1_hypotheses = function(test_value = .01) {
-            m <- get('me', thisEnv)
-            m$icc1k_hypotheses(test_value = test_value, dividers = 1)
-        },
-        
         icc1k_hypotheses = function(test_value = .01, dividers = NA) {
+            if (get('which', thisEnv) != 1)
+                warning("Model is not set up for ICC1 but for ICC", get('which', thisEnv), "; use result with care")
             if (is.na(dividers))
                 dividers <- get('dividers', thisEnv)
             vars <- get('vars', thisEnv)
@@ -115,18 +122,43 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
             }
             return(hyps.icc1k <- paste0('sd_', objects, '_', pars, '_Intercept^2 / (sd_', objects, '_', pars, '_Intercept^2 + sigma', pars, '^2 / ', dividers, ') > ', test_value))
         },
+
+        icc1_hypotheses = function(test_value = .01) {
+            m <- get('me', thisEnv)
+            m$icc1k_hypotheses(test_value = test_value, dividers = 1)
+        },
         
-        icc2_hypothesis = function(test_value = .01) {
+        icc2_hypotheses = function(test_value = .01) {
+            if (get('which', thisEnv) == 1) {
+                stop("Model is not set up for ICC2 but for ICC1; cannot generate hypotheses.")
+            } else if (get('which', thisEnv) == 3) {
+                warning("Model is not set up for ICC2 but for ICC3; use result with care")
+            }
             stop("Not implemented yet")
         },
-        icc2k_hypothesis = function(test_value = .01) {
+        icc2k_hypotheses = function(test_value = .01) {
+            if (get('which', thisEnv) == 1) {
+                stop("Model is not set up for ICC2 but for ICC1; cannot generate hypotheses.")
+            } else if (get('which', thisEnv) == 3) {
+                warning("Model is not set up for ICC2 but for ICC3; use result with care")
+            }
             stop("Not implemented yet")
         },
-        icc3_hypothesis = function(test_value = .01) {
-            stop("Not implemented yet")
+        
+        icc3_hypotheses = function(test_value = .01) {
+            if (get('which', thisEnv) != 3)
+                warning("Model is not set up for ICC3 but for ICC", get('which', thisEnv), "; use result with care")
+            # ICC3 calculation is actually identical to ICC1 calculation, just on a different model
+            m <- get('me', thisEnv)
+            suppressWarnings(m$icc1k_hypotheses(test_value = test_value, dividers = 1))
         },
-        icc3k_hypothesis = function(test_value = .01) {
-            stop("Not implemented yet")
+
+        icc3k_hypotheses = function(test_value = .01) {
+            if (get('which', thisEnv) != 3)
+                warning("Model is not set up for ICC3 but for ICC", get('which', thisEnv), "; use result with care")
+            # ICC3 calculation is actually identical to ICC1 calculation, just on a different model
+            m <- get('me', thisEnv)
+            suppressWarnings(m$icc1k_hypotheses(test_value = test_value))
         },
         
         # The functions below estimate the actual ICCs
@@ -137,6 +169,8 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
         # Returns:
         #   a brmshypothesis object, that can be used to plot or to extract confidence intervals
         icc1 = function(test_value = .01) {
+            if (get('which', thisEnv) != 1)
+                stop("Model is not set up for ICC1 but for ICC", get('which', thisEnv))
             m <- get('me', thisEnv)
             fit <- m$get_fit()
             hyp <- m$icc1_hypotheses(test_value = test_value)
@@ -144,6 +178,8 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
         },
         
         icc1k = function(test_value = .01) {
+            if (get('which', thisEnv) != 1)
+                stop("Model is not set up for ICC1 but for ICC", get('which', thisEnv))
             m <- get('me', thisEnv)
             fit <- m$get_fit()
             hyp <- m$icc1k_hypotheses(test_value = test_value)
@@ -156,11 +192,23 @@ bayesian_ICC <- function(vars, objects, judges = NA, which = 1, rescor = F) {
         icc2k = function(test_value = .01) {
             stop("Not implemented yet")
         },
+
         icc3 = function(test_value = .01) {
-            stop("Not implemented yet")
+            if (get('which', thisEnv) != 3)
+                stop("Model is not set up for ICC3 but for ICC", get('which', thisEnv))
+            m <- get('me', thisEnv)
+            fit <- m$get_fit()
+            hyp <- m$icc3_hypotheses(test_value = test_value)
+            return(hypothesis(fit, hyp, class = NULL))
         },
+
         icc3k = function(test_value = .01) {
-            stop("Not implemented yet")
+            if (get('which', thisEnv) != 3)
+                stop("Model is not set up for ICC3 but for ICC", get('which', thisEnv))
+            m <- get('me', thisEnv)
+            fit <- m$get_fit()
+            hyp <- m$icc3k_hypotheses(test_value = test_value)
+            return(hypothesis(fit, hyp, class = NULL))
         },
         
         getEnv = function() {

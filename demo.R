@@ -1,15 +1,3 @@
-# bayesian_ICC
-R Class to estimate intra class correlations (ICCs) in a Bayesian framework.
-
-Currently only ICC1, ICC1k, ICC3, and ICC3k (ICC2/2k are easy to add, will be done soon).
-
-I use Shrout and Fleiss' (1979) terminology, which is also followed in the psych package.
-
-This class estimate ICC values for many variables at the same time and in the same model; just give it a character vector with all desired variable as the first argument.
-
-## Example using data from the multilevel package
-
-```r
 library(brms)
 library(rstan)
 library(dplyr)
@@ -71,4 +59,38 @@ plot(b$icc1k())
 # is it similar to the ICC1k value found by psych::ICC()?
 b$icc1k(test_value = .44)
 # conclusion: not different
-```
+
+#######################
+### ICC3 and ICC 3k ###
+#######################
+
+b <- bayesian_ICC('value', 'object', 'judge', which = 3)
+
+# Fit the model (you might want to adjust the priors)
+b$fit(sf.df, prior = c(prior(cauchy(0, 5), class='sigma')))
+
+# adapt_delta should be increased
+# in addition, it is advisable to check if sampling went allright
+# by exploring the sampler statistics, e.g.: (using the rstan package)
+stan_trace(b$get_fit()$fit)
+stan_ac(b$get_fit()$fit)
+# mixing is fine, but there's some autocorrelation
+
+# refit with higher adapt_delta and thinning:
+b$refit(thin = 8, iter = 8000, warmup = 200, control = list(adapt_delta = .99))
+stan_ac(b$get_fit()$fit)
+# no more issues
+
+# get ICC3
+b$icc3()
+plot(b$icc3())
+# is it similar to the ICC3 value found by psych::ICC()?
+b$icc3(test_value = .71)
+# conclusion: not different
+
+# get ICC1k
+b$icc1k()
+plot(b$icc1k())
+# is it similar to the ICC3k value found by psych::ICC()?
+b$icc3k(test_value = .91)
+# conclusion: not different
