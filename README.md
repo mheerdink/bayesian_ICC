@@ -7,6 +7,14 @@ I use Shrout and Fleiss' (1979) terminology, which is also followed in the psych
 
 This class estimate ICC values for many variables at the same time and in the same model; just give it a character vector with all desired variable as the first argument.
 
+## On the test value of 0.01
+
+The hypotheses test, by default, if the estimated ICC value is greater than 0.01. Why not 0, you may ask?
+
+The Bayesian estimation ensures that all estimated ICC values will be in the interval [0,1]. Thus, the confidence intervals for the estimated ICC values will always exclude 0, and this is not a meaningful test. To check this, just run fit$icc1(test_value = 0) on a fit object. All ICCs will be significant, no matter how small.
+
+The value of 0.01 is just a random small number. Feel free to set your own lower bound using the test_value parameter to all icc functions.
+
 ## Example using data from the multilevel package
 
 ```r
