@@ -1,5 +1,5 @@
 # bayesian_ICC
-R Class to estimate ICC values in a Bayesian framework
+R Class to estimate intra class correlations (ICCs) in a Bayesian framework.
 
 Currently only ICC1 and ICC1k, ICC2/2k/3/3k are easy to add.
 
