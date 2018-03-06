@@ -89,12 +89,12 @@ The authors recommend the present approach only if the data are normally distrib
 
 Additionally, the same authors recommend (based on Gelman's work) a uniform flat (improper) prior on [0, ∞]. However, this is against the recommendations on priors on the Stan website (https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations), I find that this often leads to problems in estimating the model, and I can't seem to figure out how to set the uniform prior to be one-sided.
 
-The default priors are therefore cauchy(0, 3) priors, which cover the density distribution well.
+The default priors are therefore cauchy(0, 3) priors, which most likely cover the likely locations of the sd for the intercept well (especially if working with z-scaled predictors).
 
 You can also use either:
 
-* BRMS default priors (currently student-t): call `p <- b$get_priors(df, priors = 'brms')` followed by `b$fit(df, p)`
-* Uniform priors on [-∞, ∞]: call `p <- b$get_priors(df, priors = 'uniform')` followed by `b$fit(df, p)`
+* BRMS default priors (currently student-t): call `p <- b$get_priors(df, priors = 'brms')` followed by `b$fit(df, prior=p)`
+* Uniform priors on [-∞, ∞]: call `p <- b$get_priors(df, priors = 'uniform')` followed by `b$fit(df, prior=p)`
 
 I hope this will be useful to someone!
 
