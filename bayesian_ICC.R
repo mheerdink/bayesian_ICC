@@ -204,7 +204,16 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
             names(hyps) <- names(fs)
             hypothesis(fit, hyps, class=NULL)
         },
-        
+
+        icc.tidyMCMC = function(..., test = "= 0", k = NULL) {
+            # Return a tidy version of the iccs
+            library(broom)
+            m <- get('me', thisEnv)
+            icc <- m$icc()
+            bind_cols(data_frame(par = rownames(icc$hypothesis)), tidyMCMC(icc$samples, ...)) %>%
+                select(-term)
+        },
+
         getEnv = function() {
             return(get('thisEnv', thisEnv))
         }
