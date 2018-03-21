@@ -58,7 +58,7 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
             #  ...         Arguments passed to brms
             fit <- get('fit', thisEnv)
             if (! is.null(fit))
-                message("Refitting; previous fit will be overwritten")
+                message("Recompiling before refitting; use refit() to avoid recompilation")
             if (is.null(prior)) {
                 m <- get('me', thisEnv)
                 prior <- m$get_prior(df)
@@ -73,7 +73,7 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
             return(result)
         },
         
-        refit = function(overwrite = T, ..., cores = 4) {
+        refit = function(..., cores = 4, overwrite = T) {
             # Refit the same model to the same data, e.g., with new parameters
             #
             # Args:
@@ -96,18 +96,28 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
             return(fit)
         },
 
-        get_prior = function(df, priors=c('cauchy', 'default', 'uniform')) {
-            # Erase all default priors because stan then defaults to uniform on [-∞, ∞]
-            # I haven't figured out how to make the priors uniform on [0, ∞], which might be better
-            # according to doi:10.1186/1471-2288-14-121
+        get_prior = function(df, sd_prior = NULL, priors=c('cauchy', 'default', 'normal', 'uniform', 'inv_gamma')) {
+            # Set priors for the sd variables to sd_prior
+            # or auto-choose a prior
+            # Note that this leaves the priors for sigma alone, which are student t by default scaled around the approx. mean of the variable
             bform <- get('bform', thisEnv)
             priors <- match.arg(priors)
             p <- brms::get_prior(bform, df)
-            if (priors == 'cauchy') {
-                # use cauchy(0,3) which seems to cover the likely values of sigma (and a lot more)
-                p[p$class == 'sigma' | (p$class == 'sd' & p$group == ''), 'prior'] <- 'cauchy(0, 3)'
-            } else if (priors == 'uniform') {
-                p[, 'prior'] <- ''
+            if (! is.null(sd_prior)) {
+                p[p$class == 'sd', 'prior'] <- sd_prior
+            } else {
+                if (priors == 'cauchy') {
+                    p[p$class == 'sd', 'prior'] <- 'cauchy(0, 5)'
+                } else if (priors == 'inv_gamma') {
+                    p[p$class == 'sd', 'prior'] <- 'inv_gamma(1, 1)'
+                } else if (priors == 'normal') {
+                    p[p$class == 'sd', 'prior'] <- 'normal(0, 5)'
+                } else if (priors == 'uniform') {
+                    # Erase all default priors because brms then defaults to uniform on [0, ∞]
+                    # which is recommended according to doi:10.1186/1471-2288-14-121
+                    # however Gelman (2006) and others find that this over-estimates the variance components
+                    p[p$class == 'sd', 'prior'] <- ''
+                }
             }
             return(p)
         },

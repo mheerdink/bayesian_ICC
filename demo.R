@@ -25,8 +25,8 @@ source('bayesian_ICC.R')
 # (the icc estimates will still vary from run to run)
 set.seed(123)
 
-# get the data in long format for the bayesian ICC and create a
-# second rating column to demonstrate the multivariate ICC
+# the data have to be in long format for the bayesian ICC
+# also, create a second rating column to demonstrate the multivariate ICC
 sf.df <- sf %>%
     as_data_frame() %>%
     mutate(object = 1:n()) %>%
@@ -43,8 +43,11 @@ head(sf.df, 8)
 b <- bayesian_ICC(c('rating', 'rating2'), 'object', type = 1)
 
 # Fit the model
-# You might want to adjust the priors; all priors are uniform on [-∞, ∞] by default, run b$get_priors(df.df)
-# to get the priors and later pass them to fit using the 'prior' argument, e.g. b$fit(sf.df, prior = b$get_priors(df.df))
+# You might want to adjust the priors; all priors are cauchy(0, 5) by default,
+# run b$get_priors(sf.df) to get the priors and later pass them to fit using the
+# 'prior' argument, e.g.
+# b$fit(sf.df, prior = b$get_priors(sf.df, priors='uniform'))
+# for uniform priors on [0, ∞]
 b$fit(sf.df)
 
 # adapt_delta should be increased
@@ -68,8 +71,9 @@ plot(b$icc())
 b$icc(test = paste('=', c(.17, 0, .44, 0)))
 # conclusion: slightly higher
 
-# and, just for the fun of it, something that you cannot do with 'normal' ICC values:
-# how much higher are the ICC values for 'rating' than those for the randomly generated 'rating2'?
+# and, just for the fun of it, something that you cannot do with 'normal' ICC
+# values: how much higher are the ICC values for 'rating' than those for the
+# randomly generated 'rating2'?
 hypothesis(b$get_fit(), c(paste(b$icc1_formulae()[1:2], collapse=' > '), paste(b$icc1_formulae()[3:4], collapse=' > ')), class=NULL)
 
 #######################

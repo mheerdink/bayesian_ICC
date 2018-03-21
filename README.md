@@ -49,12 +49,15 @@ head(sf.df, 8)
 b <- bayesian_ICC(c('rating', 'rating2'), 'object', type = 1)
 
 # Fit the model
-# You might want to adjust the priors; all priors are uniform on [-∞, ∞] by default, run b$get_priors(df.df)
-# to get the priors and later pass them to fit using the 'prior' argument, e.g. b$fit(sf.df, prior = b$get_priors(df.df))
+# You might want to adjust the priors; all priors are cauchy(0, 5) by default,
+# run b$get_priors(sf.df) to get the priors and later pass them to fit using the
+# 'prior' argument, e.g.
+# b$fit(sf.df, prior = b$get_priors(sf.df, priors='uniform'))
+# for uniform priors on [0, ∞]
 b$fit(sf.df)
 
 # adapt_delta should be increased
-# in addition, it is advisable to check if sampling went allright
+# in addition, it is advisable to check if sampling went alright
 # by exploring the sampler statistics, e.g.: (using the rstan package)
 stan_trace(b$get_fit()$fit)
 stan_ac(b$get_fit()$fit)
@@ -74,8 +77,9 @@ plot(b$icc())
 b$icc(test = paste('=', c(.17, 0, .44, 0)))
 # conclusion: slightly higher
 
-# and, just for the fun of it, something that you cannot do with 'normal' ICC values:
-# how much higher are the ICC values for 'rating' than those for the randomly generated 'rating2'?
+# and, just for the fun of it, something that you cannot do with 'normal' ICC
+# values: how much higher are the ICC values for 'rating' than those for the
+# randomly generated 'rating2'?
 hypothesis(b$get_fit(), c(paste(b$icc1_formulae()[1:2], collapse=' > '), paste(b$icc1_formulae()[3:4], collapse=' > ')), class=NULL)
 ```
 
@@ -85,16 +89,23 @@ Bayesian estimation of the confidence intervals of ICCs is not perfect, as expla
 
 The authors recommend the present approach only if the data are normally distributed, and if the number of levels of each random factors (i.e., the number of objects or the number of objects) is greater than 8. In other cases, Modified Large Sample (MLS) or Generalized Confidence Interval (GCI) methods might be better for obtaining the confidence interval. This means that, strictly speaking, this approach cannot be used with the Shrout & Fleiss (1979) example, as I did above.
 
+See also https://doi.org/10.1080/00273171.2016.1167008 for a good discussion of estimation of variance components with few clusters.
+
 ## About priors
 
-Additionally, the same authors recommend (based on Gelman's work) a uniform flat (improper) prior on [0, ∞]. However, this is against the recommendations on priors on the Stan website (https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations), I find that this often leads to problems in estimating the model, and I can't seem to figure out how to set the uniform prior to be one-sided.
+There's a lot of debate about the right priors to use for the variance components in hierarchical models.
 
-The default priors are therefore cauchy(0, 3) priors, which most likely cover the likely locations of the sd for the intercept well (especially if working with z-scaled predictors).
+Some argue for a uniform flat (improper) prior on [0, ∞], which others have found to over-estimate the variance component (eg Gelman, 2006). It is also against the recommendations on priors on the Stan website (https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations).
+
+Others argue for a weakly informative cauchy(0, 5) or t7 or normal(0, 1) priors. This seems to be a reasonable choice according to https://doi.org/10.1080/00273171.2016.1167008 so the default priors are cauchy(0,5).
 
 You can also use either:
 
-* BRMS default priors (currently student-t): call `p <- b$get_priors(df, priors = 'brms')` followed by `b$fit(df, prior=p)`
-* Uniform priors on [-∞, ∞]: call `p <- b$get_priors(df, priors = 'uniform')` followed by `b$fit(df, prior=p)`
+* BRMS default priors (currently student-t): call `p <- b$get_priors(df, priors = 'default')` followed by `b$fit(df, prior=p)`
+* Normal (0,5) priors: call `p <- b$get_priors(df, priors = 'normal')` followed by `b$fit(df, prior=p)`
+* Inverse gamma (1,1) priors: call `p <- b$get_priors(df, priors = 'inv_gamma')` followed by `b$fit(df, prior=p)`
+* Uniform priors on [0, ∞]: call `p <- b$get_priors(df, priors = 'uniform')` followed by `b$fit(df, prior=p)`
+* Any other prior that you like, by calling `p <- b$get_priors(df, sd_prior = 'your_prior_in_stan_code')` followed by `b$fit(df, prior=p)`
 
 I hope this will be useful to someone!
 
