@@ -96,6 +96,14 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
             return(fit)
         },
 
+        get_k = function() {
+            # Get the divider
+            k <- get('k', thisEnv)
+            if (is.null(k))
+                stop("Run method 'fit' first")
+            return(k)
+        },
+        
         get_prior = function(df, sd_prior = NULL, priors=c('cauchy', 'default', 'normal', 'uniform', 'inv_gamma')) {
             # Set priors for the sd variables to sd_prior
             # or auto-choose a prior
@@ -226,6 +234,31 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
 
         getEnv = function() {
             return(get('thisEnv', thisEnv))
+        },
+        
+        plot = function(conf.method = 'HPDinterval', conf.level = .95, regex_pars = '.*') {
+            library(ggplot2)
+            library(broom)
+            library(dplyr)
+            m <- get('me', thisEnv)
+            icc <- m$icc()
+            hyps <- rownames(icc$hypothesis)
+            names(hyps) <- paste0('H', 1:length(hyps))
+            tidyMCMC(icc$samples, conf.int = T, conf.method = conf.method, conf.level = conf.level) %>%
+                filter(grepl(regex_pars, hyps[term])) %>%
+                mutate(par = sub('\\sICC[123]k?$', '', hyps[term]), icc = sub('.*\\s(ICC[123]k?)$', '\\1', hyps[term])) %>%
+                ggplot(aes(x = par, y = estimate)) +
+                geom_violin(data = as_data_frame(icc$samples) %>%
+                                gather(term, estimate) %>%
+                                filter(grepl(regex_pars, hyps[term])) %>%
+                                mutate(par = sub('\\sICC[123]k?$', '', hyps[term]), icc = sub('.*\\s(ICC[123]k?)$', '\\1', hyps[term])),
+                            fill = 'white', color = 'lightblue', width=1) +
+                geom_pointrange(aes(ymin = conf.low, ymax = conf.high), color='darkblue') +
+                coord_flip() +
+                facet_grid(~ icc) +
+                labs(y = "ICC Posterior densities, medians,\nand 95% credible intervals", x = NULL) +
+                scale_y_continuous(expand = c(0, .01), limits=c(0, 1), breaks = seq(0, 1, len=6)) +
+                theme(panel.spacing = unit(1.5, 'lines'))
         }
     )
 
