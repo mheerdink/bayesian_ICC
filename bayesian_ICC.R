@@ -228,8 +228,13 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
             library(broom)
             m <- get('me', thisEnv)
             icc <- m$icc()
-            bind_cols(data_frame(par = rownames(icc$hypothesis)), tidyMCMC(icc$samples, ...)) %>%
-                select(-term)
+            if ('Hypothesis' %in% names(icc$hypothesis))
+                hyp.names <- icc$hypothesis$Hypothesis
+            else # older version of brms?
+                hyp.names <- rownames(icc$hypothesis)
+            tidyMCMC(icc$samples, ...) %>%
+                mutate(term = hyp.names) %>%
+                separate(term, c('variable', 'icc'), sep=' ', extra='merge')
         },
 
         getEnv = function() {
@@ -242,16 +247,20 @@ bayesian_ICC <- function(vars, objects, judges = NULL, type = 1, rescor = F) {
             library(dplyr)
             m <- get('me', thisEnv)
             icc <- m$icc()
-            hyps <- rownames(icc$hypothesis)
-            names(hyps) <- paste0('H', 1:length(hyps))
+            if ('Hypothesis' %in% names(icc$hypothesis))
+                hyp.names <- icc$hypothesis$Hypothesis
+            else # older version of brms?
+                hyp.names <- rownames(icc$hypothesis)
+            names(hyp.names) <- paste0('H', 1:length(hyp.names))
             tidyMCMC(icc$samples, conf.int = T, conf.method = conf.method, conf.level = conf.level) %>%
-                filter(grepl(regex_pars, hyps[term])) %>%
-                mutate(par = sub('\\sICC[123]k?$', '', hyps[term]), icc = sub('.*\\s(ICC[123]k?)$', '\\1', hyps[term])) %>%
+                filter(grepl(regex_pars, hyp.names[term])) %>%
+                mutate(term = hyp.names[term]) %>%
+                separate(term, c('par', 'icc'), ' ', extra = 'merge') %>%
                 ggplot(aes(x = par, y = estimate)) +
                 geom_violin(data = as_data_frame(icc$samples) %>%
                                 gather(term, estimate) %>%
-                                filter(grepl(regex_pars, hyps[term])) %>%
-                                mutate(par = sub('\\sICC[123]k?$', '', hyps[term]), icc = sub('.*\\s(ICC[123]k?)$', '\\1', hyps[term])),
+                                filter(grepl(regex_pars, hyp.names[term])) %>%
+                                mutate(par = sub('\\sICC[123]k?$', '', hyp.names[term]), icc = sub('.*\\s(ICC[123]k?)$', '\\1', hyp.names[term])),
                             fill = 'white', color = 'lightblue', width=1) +
                 geom_pointrange(aes(ymin = conf.low, ymax = conf.high), color='darkblue') +
                 coord_flip() +
